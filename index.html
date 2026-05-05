@@ -159,7 +159,7 @@ tr:hover td{background:#f0f7ff;}
     <small>Tannerre-en-Puisaye</small>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-    <button onclick="forcerSyncVersSheets().then(()=>{syncStatus(true,'✅ Synchronisé');toast('☁️ Sync forcée !');})" style="background:rgba(255,255,255,.15);border:none;color:white;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem;margin-right:6px">🔄 Sync</button><div id="sync-indicator" style="font-size:.8rem;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,.2);display:flex;align-items:center;gap:6px;">
+    <button onclick="forcerSyncVersSheets().then(()=>{syncStatus(true,'✅ Synchronisé');toast('☁️ Sync forcée !');})" style="background:rgba(255,255,255,.15);border:none;color:white;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem;margin-right:6px">🔄 Sync</button><button onclick="testerConnexion()" style="background:rgba(255,255,255,.15);border:none;color:white;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:.78rem;margin-right:6px">🧪 Test API</button><div id="sync-indicator" style="font-size:.8rem;padding:5px 12px;border-radius:20px;background:rgba(255,255,255,.2);display:flex;align-items:center;gap:6px;">
       <span id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#fbbf24;display:inline-block"></span>
       <span id="sync-text">Connexion...</span>
     </div>
@@ -465,6 +465,23 @@ function syncStatus(ok, msg){
   txt.textContent=msg;
 }
 
+async function testerConnexion(){
+  try{
+    syncStatus(null,'Test en cours...');
+    document.getElementById('sync-dot').style.background='#fbbf24';
+    const res=await fetch(API_URL+'?action=load&_ts='+Date.now(),{method:'GET',cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d=await res.json();
+    const total=(Array.isArray(d.locations)?d.locations.length:0)+(Array.isArray(d.reservations)?d.reservations.length:0);
+    syncStatus(true,'✅ API joignable');
+    toast('🧪 API OK — '+total+' enregistrements lus');
+  }catch(e){
+    console.error('Test API impossible:',e);
+    syncStatus(false,'❌ API inaccessible');
+    toast('❌ Test API impossible : '+(e.message||e));
+  }
+}
+
 async function save(){
   // Sauvegarde locale immédiate
   localStorage.setItem('cf_locations',JSON.stringify(locations));
@@ -526,41 +543,38 @@ async function chargerDepuisSheets(){
   syncStatus(null,'Chargement...');
   document.getElementById('sync-dot').style.background='#fbbf24';
   try{
-    const res=await fetch(API_URL+'?action=load');
+    const url=API_URL+'?action=load&_ts='+Date.now();
+    const res=await fetch(url,{method:'GET',cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
     const d=await res.json();
-    const sheetsLocations=(d.locations||[]).filter(x=>x.id);
-    const sheetsReservations=(d.reservations||[]).filter(x=>x.id);
+    const sheetsLocations=Array.isArray(d.locations)?d.locations.filter(x=>x&&x.id):[];
+    const sheetsReservations=Array.isArray(d.reservations)?d.reservations.filter(x=>x&&x.id):[];
 
-    // Google Sheets est TOUJOURS la source de vérité
     locations=sheetsLocations.map(o=>ordreCleLocation(normaliserDatesObjet(o)));
     reservations=sheetsReservations.map(o=>ordreReservation(normaliserDatesObjet(o)));
 
-    // Mettre à jour le cache local
     localStorage.setItem('cf_locations',JSON.stringify(locations));
     localStorage.setItem('cf_reservations',JSON.stringify(reservations));
 
-    // Recalculer le compteur depuis les IDs existants
     const ids=[...locations,...reservations]
       .map(x=>parseInt((x.id||'').replace(/[^0-9]/g,''))||0);
     compteur=(ids.length>0?Math.max(...ids):0)+1;
     localStorage.setItem('cf_cpt',compteur);
 
     syncStatus(true,'✅ Synchronisé');
-    if(sheetsLocations.length===0&&sheetsReservations.length===0){
-      toast('ℹ️ Google Sheets vide — aucune donnée à charger');
-    } else {
-      toast('☁️ Données chargées depuis Google Sheets ('+
-        (sheetsLocations.length+sheetsReservations.length)+' enregistrements)');
-    }
+    const total=sheetsLocations.length+sheetsReservations.length;
+    toast(total===0
+      ? 'ℹ️ Google Sheets vide — aucune donnée à charger'
+      : '☁️ Données chargées depuis Google Sheets ('+total+' enregistrements)');
     rafraichir();
   }catch(e){
-    // Hors ligne : utiliser le cache localStorage
-    syncStatus(false,'⚠️ Mode hors ligne');
+    console.error('Erreur chargement Sheets:',e);
+    syncStatus(false,'⚠️ Erreur de chargement');
     const cachedLoc=localStorage.getItem('cf_locations');
     const cachedRes=localStorage.getItem('cf_reservations');
     if(cachedLoc) locations=JSON.parse(cachedLoc).map(o=>ordreCleLocation(normaliserDatesObjet(o)));
     if(cachedRes) reservations=JSON.parse(cachedRes).map(o=>ordreReservation(normaliserDatesObjet(o)));
-    toast('⚠️ Hors ligne — données locales utilisées');
+    toast('⚠️ Chargement Google Sheets impossible : '+(e.message||e));
     rafraichir();
   }
 }
