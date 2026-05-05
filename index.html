@@ -139,6 +139,15 @@ tr:hover td{background:#f0f7ff;}
   nav button{padding:9px 12px;font-size:.78rem;}
   .stats-grid{grid-template-columns:repeat(2,1fr);}
 }
+
+  /* Colonne sélection */
+  .col-select { width: 40px; text-align: center; }
+  input[type="radio"].row-radio { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+  tr.row-selected { background: rgba(99,102,241,.08); }
+  .edit-bar { display:flex; gap:.5rem; align-items:center; margin-bottom:.75rem; flex-wrap:wrap; }
+  .btn-edit { background:#f59e0b; color:#fff; border:none; padding:6px 14px; border-radius:6px; cursor:pointer; font-size:.82rem; font-weight:600; }
+  .btn-edit:disabled { opacity:.4; cursor:not-allowed; }
+  .badge-edit-mode { background:#f59e0b22; color:#b45309; padding:3px 10px; border-radius:12px; font-size:.78rem; font-weight:600; }
 </style>
 </head>
 <body>
@@ -257,7 +266,7 @@ tr:hover td{background:#f0f7ff;}
     </div>
   </div>
   <div class="card">
-    <h2>🗓️ Toutes les réservations prévisionnelles</h2>
+    <h2>🗓️ Toutes les réservations prévisionnelles <span style="font-size:.8rem;background:#eef2ff;color:#4f46e5;padding:3px 8px;border-radius:999px;vertical-align:middle;">V10</span></h2>
     <div id="table-reservations"></div>
   </div>
 </div>
@@ -620,6 +629,78 @@ function majDateFinF(){
   }
 }
 
+// ─── ÉDITION RÉSERVATION ───
+let reservationEnEdition=null;
+
+function selectionnerReservation(id){
+  reservationEnEdition=id;
+  const btn=document.getElementById('btn-modifier-res');
+  if(btn) btn.disabled=false;
+  // Highlight visuel
+  document.querySelectorAll('tr[id^="row-"]').forEach(r=>r.classList.remove('row-selected'));
+  const row=document.getElementById('row-'+id);
+  if(row) row.classList.add('row-selected');
+}
+
+function editerReservation(){
+  if(!reservationEnEdition) return;
+  const r=reservations.find(x=>x.id===reservationEnEdition);
+  if(!r) return;
+  // Pré-remplir le formulaire
+  document.getElementById('r-nom').value=r.nom||'';
+  const rEv=document.getElementById('r-evenement');
+  if(rEv) rEv.value=r.evenement||'';
+  document.getElementById('r-type').value=r.type||'Association';
+  toggleAdherentR();
+  if(r.type!=='Association'){
+    const adh=document.getElementById('r-adherent');
+    if(adh) adh.value=r.adherent||'Non';
+  }
+  document.getElementById('r-debut').value=r.dateDebut||'';
+  document.getElementById('r-fin').value=r.dateFin||'';
+  document.getElementById('r-tables').value=r.tables||0;
+  document.getElementById('r-bancs').value=r.bancs||0;
+  document.getElementById('r-tmarron').value=r.tenteMarron||0;
+  document.getElementById('r-tblanche').value=r.tenteBlanche||0;
+  const rNotes=document.getElementById('r-notes');
+  if(rNotes) rNotes.value=r.notes||'';
+  calcPrixR();
+  // Afficher badge mode édition
+  const badge=document.getElementById('edit-mode-badge');
+  const btnAnnuler=document.getElementById('btn-annuler-edit');
+  if(badge) badge.style.display='inline-flex';
+  if(btnAnnuler) btnAnnuler.style.display='inline-block';
+  // Changer le texte du bouton enregistrer
+  const btnSave=document.querySelector('button[onclick="ajouterReservation()"]');
+  if(btnSave){ btnSave.textContent='💾 Enregistrer les modifications'; btnSave.style.background='#f59e0b'; }
+  // Scroll vers le formulaire
+  document.getElementById('r-nom').scrollIntoView({behavior:'smooth',block:'center'});
+  toast('✏️ Modifiez les champs puis cliquez sur "Enregistrer les modifications"');
+}
+
+function annulerEdition(){
+  reservationEnEdition=null;
+  // Réinitialiser formulaire
+  ['r-nom','r-evenement','r-debut','r-fin','r-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('r-tables').value=0;
+  document.getElementById('r-bancs').value=0;
+  document.getElementById('r-tmarron').value=0;
+  document.getElementById('r-tblanche').value=0;
+  const badge=document.getElementById('edit-mode-badge');
+  const btnAnnuler=document.getElementById('btn-annuler-edit');
+  if(badge) badge.style.display='none';
+  if(btnAnnuler) btnAnnuler.style.display='none';
+  const btnSave=document.querySelector('button[onclick="ajouterReservation()"]');
+  if(btnSave){ btnSave.textContent='🗓️ Enregistrer la réservation'; btnSave.style.background=''; }
+  const btn=document.getElementById('btn-modifier-res');
+  if(btn) btn.disabled=true;
+  // Réinitialiser dates
+  const aujourdhui=new Date();
+  const aj=`${aujourdhui.getFullYear()}-${String(aujourdhui.getMonth()+1).padStart(2,'0')}-${String(aujourdhui.getDate()).padStart(2,'0')}`;
+  document.getElementById('r-debut').value=aj;
+  document.getElementById('r-fin').value=addJours(aj,1);
+}
+
 function toggleAdherentR(){
   const t=document.getElementById('r-type').value;
   document.getElementById('r-grp-adh').style.display=t==='Association'?'none':'flex';
@@ -718,6 +799,31 @@ function verifierConflitFormR(){
 // AJOUTER RÉSERVATION
 // ═══════════════════════════════════════════════
 function ajouterReservation(){
+  // MODE ÉDITION : mettre à jour l'existant
+  if(reservationEnEdition){
+    const idx=reservations.findIndex(x=>x.id===reservationEnEdition);
+    if(idx!==-1){
+      const nom=document.getElementById('r-nom').value.trim();
+      const rEv=document.getElementById('r-evenement'); const evenement=rEv?rEv.value.trim():'';
+      const type=document.getElementById('r-type').value;
+      const adh=type==='Association'?'N/A':document.getElementById('r-adherent').value;
+      const debut=document.getElementById('r-debut').value;
+      const fin=document.getElementById('r-fin').value;
+      const tables=parseInt(document.getElementById('r-tables').value)||0;
+      const bancs=parseInt(document.getElementById('r-bancs').value)||0;
+      const tm=parseInt(document.getElementById('r-tmarron').value)||0;
+      const tb=parseInt(document.getElementById('r-tblanche').value)||0;
+      const notes=document.getElementById('r-notes')?document.getElementById('r-notes').value:'';
+      if(!nom){toast('⚠️ Le nom est obligatoire.');return;}
+      const prix=calculerPrix(type,adh,tables,tm,tb);
+      reservations[idx]={...reservations[idx],nom,evenement,type,adherent:adh,
+        dateDebut:debut,dateFin:fin,tables,bancs,tenteMarron:tm,tenteBlanche:tb,prix,notes};
+      save(); annulerEdition(); rafraichir();
+      toast('✅ Réservation '+reservations[idx].id+' modifiée avec succès !');
+    }
+    return;
+  }
+  // MODE CRÉATION NORMALE
   const nom=document.getElementById('r-nom').value.trim();
   const rEv=document.getElementById('r-evenement'); const evenement=rEv?rEv.value.trim():'';
   const type=document.getElementById('r-type').value;
@@ -995,13 +1101,32 @@ function rafraichir(){
   // Table réservations
   const tr=document.getElementById('table-reservations');
   if(tr){
-    if(reservations.length===0)tr.innerHTML='<div class="alert alert-info">Aucune réservation enregistrée.</div>';
-    else tr.innerHTML=`<table><thead><tr><th>N°</th><th>Nom</th><th>🎉 Évènement</th><th>Type</th><th>Adh.</th>
-      <th>Début</th><th>Fin</th><th>Tables</th><th>Bancs</th><th>T.Marron</th><th>T.Blanche</th>
-      <th>Prix est.</th><th>Notes</th><th>Actions</th></tr></thead><tbody>`+
+    if(reservations.length===0){
+      tr.innerHTML='<div class="alert alert-info">Aucune réservation enregistrée.</div>';
+    } else {
+      // Barre de modification
+      const editBar=document.createElement('div');
+      editBar.className='edit-bar';
+      editBar.id='edit-bar-res';
+      editBar.innerHTML=`
+        <div style="font-size:.82rem;color:#6b7280;margin-right:.5rem">1) Cochez une ligne, 2) cliquez sur modifier</div>
+        <button class="btn-edit" id="btn-modifier-res" disabled onclick="editerReservation()">✏️ Modifier la sélection</button>
+        <span id="edit-mode-badge" style="display:none" class="badge-edit-mode">✏️ Mode modification</span>
+        <button id="btn-annuler-edit" style="display:none;background:#6b7280;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:.82rem" onclick="annulerEdition()">✖ Annuler</button>
+      `;
+      tr.innerHTML='';
+      tr.appendChild(editBar);
+      const tbl=document.createElement('div');
+      tr.appendChild(tbl);
+      tbl.innerHTML=`<table><thead><tr>
+        <th class="col-select" title="Sélectionner pour modifier">✏️</th>
+        <th>N°</th><th>Nom</th><th>🎉 Évènement</th><th>Type</th><th>Adh.</th>
+        <th>Début</th><th>Fin</th><th>Tables</th><th>Bancs</th><th>T.Marron</th><th>T.Blanche</th>
+        <th>Prix est.</th><th>Notes</th><th>Actions</th></tr></thead><tbody>`+
       reservations.map(r=>{
         const conflict=conflits.find(c=>c.id===r.id);
-        return`<tr${conflict?' class="conflict-row"':''}>
+        return`<tr${conflict?' class="conflict-row"':''} id="row-${r.id}">
+          <td class="col-select"><input type="radio" class="row-radio" name="res-select" value="${r.id}" onclick="selectionnerReservation('${r.id}')"></td>
           <td><strong>${r.id}</strong>${conflict?'<span class="badge badge-conf" style="margin-left:4px">⚠️</span>':''}</td>
           <td>${r.nom}</td><td>${r.evenement||'—'}</td><td>${badgeType(r.type)}</td><td>${badgeAdh(r.adherent)}</td>
           <td>${fmtDate(r.dateDebut)}</td><td>${fmtDate(r.dateFin)}</td>
@@ -1011,7 +1136,8 @@ function rafraichir(){
             <button class="btn btn-success btn-sm" onclick="ouvrirConfirmer('${r.id}')">✅ Confirmer</button>
             <button class="btn btn-danger btn-sm" onclick="supprimerReservation('${r.id}')">🗑️</button>
           </td></tr>`;
-      }).join('')+'</tbody></table>';
+      }).join('')+'</tbody></table>'`;
+    }
   }
 
   // Table locations
