@@ -103,3 +103,4 @@ supabase/
 - [ ] Page Historique
 - [ ] Détection de conflits de stock
 - [ ] Configuration Netlify (env vars)
+# comite-des-fetes
