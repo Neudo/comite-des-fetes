@@ -1,13 +1,55 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Trash2, PackageCheck, Loader2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  ClipboardList,
+  Loader2,
+  MoreHorizontal,
+  PackageCheck,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Table,
   TableBody,
@@ -16,18 +58,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageHeader } from '@/components/PageHeader'
+import { EmptyState } from '@/components/EmptyState'
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  useLocations,
   useCreateLocation,
-  useRegisterReturn,
   useDeleteLocation,
+  useLocations,
+  useRegisterReturn,
 } from '@/hooks/useLocations'
 import { calculerPrix, STOCK } from '@/lib/pricing'
 import { stockEngageActuel } from '@/lib/stock'
@@ -69,35 +106,229 @@ export function LocationsPage() {
   const returnMut = useRegisterReturn()
   const deleteMut = useDeleteLocation()
 
-  const [form, setForm] = useState<FormState>(emptyForm)
+  const [createOpen, setCreateOpen] = useState(false)
   const [returnTarget, setReturnTarget] = useState<Location | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Location | null>(null)
 
-  const actives = useMemo(() => locations.filter((l) => !l.date_retour), [locations])
+  const actives = useMemo(
+    () =>
+      locations
+        .filter((l) => !l.date_retour)
+        .sort((a, b) => (a.date_retrait < b.date_retrait ? 1 : -1)),
+    [locations],
+  )
   const dispoActuel = useMemo(() => stockEngageActuel(locations), [locations])
 
-  const adh: Adherent = form.type === 'Association' ? 'N/A' : form.adherent
-  const prix = calculerPrix(
-    form.type,
-    adh,
-    form.tables,
-    form.tente_marron,
-    form.tente_blanche,
+  async function handleDelete() {
+    if (!deleteTarget) return
+    try {
+      await deleteMut.mutateAsync(deleteTarget.id)
+      toast.success('Location supprimée.')
+      setDeleteTarget(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erreur de suppression.')
+    }
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="Locations"
+        description={`${actives.length} location${actives.length > 1 ? 's' : ''} en cours`}
+        icon={<ClipboardList className="h-5 w-5" />}
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Nouvelle location
+          </Button>
+        }
+      />
+
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="space-y-2 p-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : actives.length === 0 ? (
+            <EmptyState
+              className="m-4"
+              icon={<ClipboardList className="h-5 w-5" />}
+              title="Aucune location en cours"
+              description="Quand un emprunteur retire du matériel, enregistre la sortie ici."
+              action={
+                <Button onClick={() => setCreateOpen(true)} variant="outline">
+                  <Plus className="h-4 w-4" />
+                  Nouvelle location
+                </Button>
+              }
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>N°</TableHead>
+                  <TableHead>Emprunteur</TableHead>
+                  <TableHead>Évènement</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Retrait</TableHead>
+                  <TableHead>Prév. retour</TableHead>
+                  <TableHead className="text-right">Tables</TableHead>
+                  <TableHead className="text-right">T.Marron</TableHead>
+                  <TableHead className="text-right">T.Blanche</TableHead>
+                  <TableHead className="text-right">Prix</TableHead>
+                  <TableHead className="w-[50px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {actives.map((l) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="font-mono text-xs font-medium">{l.id}</TableCell>
+                    <TableCell className="font-medium">{l.nom}</TableCell>
+                    <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                      {l.evenement || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={l.type === 'Association' ? 'assoc' : 'part'}>
+                        {l.type}
+                        {l.adherent !== 'N/A' && ` · ${l.adherent === 'Oui' ? 'Adh.' : 'Non adh.'}`}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{fmtDate(l.date_retrait)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {fmtDate(l.date_prev_retour)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{l.tables}</TableCell>
+                    <TableCell className="text-right tabular-nums">{l.tente_marron}</TableCell>
+                    <TableCell className="text-right tabular-nums">{l.tente_blanche}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {l.prix} €
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setReturnTarget(l)}>
+                            <PackageCheck className="h-4 w-4" />
+                            Enregistrer le retour
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => setDeleteTarget(l)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Supprimer
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <CreateLocationSheet
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        dispo={dispoActuel}
+        onSubmit={async (input) => {
+          const id = await createMut.mutateAsync(input)
+          toast.success(`Location ${id} enregistrée.`)
+          setCreateOpen(false)
+        }}
+        pending={createMut.isPending}
+      />
+
+      <ReturnDialog
+        location={returnTarget}
+        onClose={() => setReturnTarget(null)}
+        onSubmit={async (input) => {
+          try {
+            await returnMut.mutateAsync(input)
+            toast.success('Retour enregistré.')
+            setReturnTarget(null)
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Erreur.')
+          }
+        }}
+        pending={returnMut.isPending}
+      />
+
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => !v && setDeleteTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer la location {deleteTarget?.id} ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.nom} — retrait du {fmtDate(deleteTarget?.date_retrait)}. Cette
+              action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleDelete}>
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
+}
+
+interface CreateSheetProps {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  dispo: { tables: number; tente_marron: number; tente_blanche: number }
+  onSubmit: (input: {
+    nom: string
+    evenement: string | null
+    type: TypeEmprunteur
+    adherent: Adherent
+    date_retrait: string
+    date_prev_retour: string | null
+    tables: number
+    bancs: number
+    tente_marron: number
+    tente_blanche: number
+    prix: number
+  }) => Promise<void>
+  pending: boolean
+}
+
+function CreateLocationSheet({ open, onOpenChange, dispo, onSubmit, pending }: CreateSheetProps) {
+  const [form, setForm] = useState<FormState>(emptyForm)
+
+  useEffect(() => {
+    if (open) setForm(emptyForm())
+  }, [open])
+
+  const adh: Adherent = form.type === 'Association' ? 'N/A' : form.adherent
+  const prix = calculerPrix(form.type, adh, form.tables, form.tente_marron, form.tente_blanche)
 
   function setField<K extends keyof FormState>(k: K, v: FormState[K]) {
     setForm((f) => ({ ...f, [k]: v }))
   }
-
   function setTables(v: number) {
     setForm((f) => ({ ...f, tables: v, bancs: v * 2 }))
   }
-
   function setRetrait(v: string) {
     setForm((f) => {
       const next = { ...f, date_retrait: v }
-      if (!f.date_prev_retour || f.date_prev_retour <= v) {
-        next.date_prev_retour = addJours(v, 1)
-      }
+      if (!f.date_prev_retour || f.date_prev_retour <= v) next.date_prev_retour = addJours(v, 1)
       return next
     })
   }
@@ -113,25 +344,21 @@ export function LocationsPage() {
       toast.error('Sélectionnez au moins un article.')
       return
     }
-    if (form.tables > dispoActuel.tables) {
-      toast.error(`Seulement ${dispoActuel.tables} table(s) disponible(s) actuellement.`)
+    if (form.tables > dispo.tables) {
+      toast.error(`Seulement ${dispo.tables} table(s) disponible(s).`)
       return
     }
-    if (form.tente_marron > dispoActuel.tente_marron) {
-      toast.error(
-        `Seulement ${dispoActuel.tente_marron} tente(s) marron disponible(s) actuellement.`,
-      )
+    if (form.tente_marron > dispo.tente_marron) {
+      toast.error(`Seulement ${dispo.tente_marron} tente(s) marron disponible(s).`)
       return
     }
-    if (form.tente_blanche > dispoActuel.tente_blanche) {
-      toast.error(
-        `Seulement ${dispoActuel.tente_blanche} tente(s) blanche disponible(s) actuellement.`,
-      )
+    if (form.tente_blanche > dispo.tente_blanche) {
+      toast.error(`Seulement ${dispo.tente_blanche} tente(s) blanche disponible(s).`)
       return
     }
 
     try {
-      const id = await createMut.mutateAsync({
+      await onSubmit({
         nom,
         evenement: form.evenement.trim() || null,
         type: form.type,
@@ -144,58 +371,45 @@ export function LocationsPage() {
         tente_blanche: form.tente_blanche,
         prix,
       })
-      toast.success(`Location ${id} enregistrée.`)
-      setForm(emptyForm())
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erreur lors de l\'enregistrement.')
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer cette location ?')) return
-    try {
-      await deleteMut.mutateAsync(id)
-      toast.success('Location supprimée.')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erreur de suppression.')
-    }
-  }
-
   return (
-    <div className="grid gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>➕ Nouvelle location (retrait effectif)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 rounded-md border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            ⚠️ Ici on enregistre un retrait <strong>réel</strong> de matériel. Le stock
-            disponible est vérifié.
-          </div>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-xl">
+        <SheetHeader>
+          <SheetTitle>Nouvelle location</SheetTitle>
+          <SheetDescription>
+            Enregistrer un retrait effectif. Le stock disponible est vérifié.
+          </SheetDescription>
+        </SheetHeader>
 
-          <form onSubmit={handleSubmit} className="grid gap-4">
-            <div className="grid gap-1.5">
-              <Label htmlFor="loc-nom">Nom emprunteur ou association</Label>
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
+          <SheetBody className="space-y-5">
+            <div className="grid gap-2">
+              <Label htmlFor="loc-nom">Emprunteur *</Label>
               <Input
                 id="loc-nom"
-                placeholder="Nom complet…"
+                placeholder="Nom complet ou association"
                 value={form.nom}
                 onChange={(e) => setField('nom', e.target.value)}
+                autoFocus
               />
             </div>
-
-            <div className="grid gap-1.5">
-              <Label htmlFor="loc-event">🎉 Évènement</Label>
+            <div className="grid gap-2">
+              <Label htmlFor="loc-event">Évènement</Label>
               <Input
                 id="loc-event"
-                placeholder="Ex : Fête du village, Repas annuel…"
+                placeholder="Ex : Fête du village"
                 value={form.evenement}
                 onChange={(e) => setField('evenement', e.target.value)}
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-              <div className="grid gap-1.5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
                 <Label htmlFor="loc-type">Type</Label>
                 <Select
                   id="loc-type"
@@ -206,10 +420,9 @@ export function LocationsPage() {
                   <option value="Association">Association</option>
                 </Select>
               </div>
-
               {form.type !== 'Association' && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="loc-adh">Adhérent ?</Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="loc-adh">Adhérent</Label>
                   <Select
                     id="loc-adh"
                     value={form.adherent}
@@ -220,9 +433,11 @@ export function LocationsPage() {
                   </Select>
                 </div>
               )}
+            </div>
 
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-retrait">Date de retrait</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="loc-retrait">Date de retrait *</Label>
                 <Input
                   id="loc-retrait"
                   type="date"
@@ -230,9 +445,8 @@ export function LocationsPage() {
                   onChange={(e) => setRetrait(e.target.value)}
                 />
               </div>
-
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-prev">Date prévisible retour</Label>
+              <div className="grid gap-2">
+                <Label htmlFor="loc-prev">Retour prévu</Label>
                 <Input
                   id="loc-prev"
                   type="date"
@@ -243,179 +457,91 @@ export function LocationsPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-tables">
-                  Tables <span className="text-muted-foreground">(× 2 bancs incl.)</span>
-                </Label>
-                <Input
-                  id="loc-tables"
-                  type="number"
-                  min={0}
-                  max={STOCK.tables}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <Label>Matériel</Label>
+                <span className="text-xs text-muted-foreground">
+                  Dispo : {dispo.tables}T · {dispo.tente_marron}M · {dispo.tente_blanche}B
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Counter
+                  label="Tables"
+                  hint="× 2 bancs"
                   value={form.tables}
-                  onChange={(e) => setTables(parseInt(e.target.value) || 0)}
+                  max={STOCK.tables}
+                  onChange={setTables}
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-bancs">Bancs (info)</Label>
-                <Input
-                  id="loc-bancs"
-                  type="number"
-                  min={0}
-                  max={STOCK.bancs}
+                <Counter
+                  label="Bancs"
                   value={form.bancs}
-                  onChange={(e) => setField('bancs', parseInt(e.target.value) || 0)}
+                  max={STOCK.bancs}
+                  onChange={(v) => setField('bancs', v)}
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-tmarron">Tentes armée marron</Label>
-                <Input
-                  id="loc-tmarron"
-                  type="number"
-                  min={0}
-                  max={STOCK.tente_marron}
+                <Counter
+                  label="T. marron"
                   value={form.tente_marron}
-                  onChange={(e) => setField('tente_marron', parseInt(e.target.value) || 0)}
+                  max={STOCK.tente_marron}
+                  onChange={(v) => setField('tente_marron', v)}
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="loc-tblanche">Tente blanche 15m</Label>
-                <Input
-                  id="loc-tblanche"
-                  type="number"
-                  min={0}
-                  max={STOCK.tente_blanche}
+                <Counter
+                  label="T. blanche"
                   value={form.tente_blanche}
-                  onChange={(e) => setField('tente_blanche', parseInt(e.target.value) || 0)}
+                  max={STOCK.tente_blanche}
+                  onChange={(v) => setField('tente_blanche', v)}
                 />
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-blue-50 px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="text-xl">💶</span>
-                <div>
-                  <div className="text-xs text-muted-foreground">Prix total</div>
-                  <div className="text-2xl font-bold text-blue-700">
-                    {prix} €{form.type === 'Association' && ' (Gratuit)'}
-                  </div>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Dispo. actuel : {dispoActuel.tables} tables · {dispoActuel.tente_marron}{' '}
-                marron · {dispoActuel.tente_blanche} blanche
-              </div>
+            <div className="flex items-center justify-between rounded-md border bg-muted/40 px-4 py-3">
+              <span className="text-sm text-muted-foreground">Prix total</span>
+              <span className="text-xl font-semibold tabular-nums">
+                {prix} €
+                {form.type === 'Association' && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Gratuit
+                  </span>
+                )}
+              </span>
             </div>
+          </SheetBody>
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={createMut.isPending}>
-                {createMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                ✅ Enregistrer le retrait
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          <SheetFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Enregistrer le retrait
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>📋 Locations en cours ({actives.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Chargement…
-            </div>
-          ) : actives.length === 0 ? (
-            <div className="rounded-md border-l-4 border-blue-400 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-              Aucune location active.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>N°</TableHead>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Évènement</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Adh.</TableHead>
-                  <TableHead>Retrait</TableHead>
-                  <TableHead>Prév. retour</TableHead>
-                  <TableHead className="text-right">Tables</TableHead>
-                  <TableHead className="text-right">Bancs</TableHead>
-                  <TableHead className="text-right">T.Marron</TableHead>
-                  <TableHead className="text-right">T.Blanche</TableHead>
-                  <TableHead className="text-right">Prix</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {actives.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-semibold">{l.id}</TableCell>
-                    <TableCell>{l.nom}</TableCell>
-                    <TableCell>{l.evenement || '—'}</TableCell>
-                    <TableCell>
-                      <Badge variant={l.type === 'Association' ? 'assoc' : 'part'}>
-                        {l.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {l.adherent === 'N/A' ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <Badge variant={l.adherent === 'Oui' ? 'adh' : 'non'}>
-                          {l.adherent}
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{fmtDate(l.date_retrait)}</TableCell>
-                    <TableCell>{fmtDate(l.date_prev_retour)}</TableCell>
-                    <TableCell className="text-right">{l.tables}</TableCell>
-                    <TableCell className="text-right">{l.bancs}</TableCell>
-                    <TableCell className="text-right">{l.tente_marron}</TableCell>
-                    <TableCell className="text-right">{l.tente_blanche}</TableCell>
-                    <TableCell className="text-right font-semibold">{l.prix} €</TableCell>
-                    <TableCell className="whitespace-nowrap text-right">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setReturnTarget(l)}
-                      >
-                        <PackageCheck className="h-3.5 w-3.5" /> Retour
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        className="ml-1 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                        onClick={() => handleDelete(l.id)}
-                        disabled={deleteMut.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+interface CounterProps {
+  label: string
+  hint?: string
+  value: number
+  max: number
+  onChange: (v: number) => void
+}
 
-      <ReturnDialog
-        location={returnTarget}
-        onClose={() => setReturnTarget(null)}
-        onSubmit={async (input) => {
-          try {
-            await returnMut.mutateAsync(input)
-            toast.success('Retour enregistré.')
-            setReturnTarget(null)
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : 'Erreur.')
-          }
-        }}
-        pending={returnMut.isPending}
+function Counter({ label, hint, value, max, onChange }: CounterProps) {
+  return (
+    <div className="grid gap-1.5">
+      <Label className="text-xs">
+        {label}
+        {hint && <span className="ml-1 font-normal text-muted-foreground">({hint})</span>}
+      </Label>
+      <Input
+        type="number"
+        min={0}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value) || 0)}
       />
     </div>
   )
@@ -438,8 +564,7 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
   const [etat, setEtat] = useState<EtatRetour>('Bon')
   const [notes, setNotes] = useState('')
 
-  // Reset state quand on ouvre/change de cible
-  useMemo(() => {
+  useEffect(() => {
     if (location) {
       setDate(today())
       setEtat('Bon')
@@ -453,15 +578,15 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
     <Dialog open={!!location} onOpenChange={(v) => !v && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>📦 Retour — {location.id}</DialogTitle>
+          <DialogTitle>Enregistrer le retour — {location.id}</DialogTitle>
+          <DialogDescription>
+            {location.nom}
+            {location.evenement && ` · ${location.evenement}`}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="text-sm text-muted-foreground">
-            <strong className="text-foreground">{location.nom}</strong>
-            {location.evenement && ` · ${location.evenement}`}
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="ret-date">Date de retour réelle</Label>
+          <div className="grid gap-2">
+            <Label htmlFor="ret-date">Date de retour</Label>
             <Input
               id="ret-date"
               type="date"
@@ -469,7 +594,7 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <Label htmlFor="ret-etat">État du matériel</Label>
             <Select
               id="ret-etat"
@@ -481,7 +606,7 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
               <option value="Manquant">Manquant</option>
             </Select>
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid gap-2">
             <Label htmlFor="ret-notes">Notes</Label>
             <Textarea
               id="ret-notes"
