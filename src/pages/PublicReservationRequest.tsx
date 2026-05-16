@@ -1,5 +1,4 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   CalendarDays,
@@ -7,8 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Clock3,
   Loader2,
+  MapPin,
+  PackageCheck,
   Send,
+  Sparkles,
+  Tent,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -176,12 +180,43 @@ export function PublicReservationRequestPage() {
 
   return (
     <PublicShell>
+      <section className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-md border bg-card p-5 shadow-sm md:p-6">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-secondary/70 px-3 py-1 text-xs font-semibold text-secondary-foreground">
+            <Sparkles className="h-3.5 w-3.5" />
+            Matériel communal
+          </div>
+          <h1 className="max-w-2xl text-3xl font-semibold leading-tight tracking-normal md:text-4xl">
+            Réserver tables, bancs et tentes pour votre événement
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
+            Envoyez votre demande au Comité des Fêtes de Tannerre-en-Puisaye. Le tarif est estimé automatiquement avant validation.
+          </p>
+        </div>
+        <div className="grid gap-3 rounded-md border bg-primary p-5 text-primary-foreground shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary-foreground/15">
+              <Tent className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Retrait sur rendez-vous</div>
+              <div className="text-xs opacity-80">Demande vérifiée par le comité</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <HeroFact icon={<MapPin className="h-3.5 w-3.5" />} label="Tannerre" />
+            <HeroFact icon={<PackageCheck className="h-3.5 w-3.5" />} label="Stock suivi" />
+          </div>
+        </div>
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card>
+        <Card className="overflow-hidden border-primary/20 shadow-md">
+          <div className="h-1.5 bg-primary" />
           <CardHeader>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <CardTitle>Demande de réservation</CardTitle>
+                <CardTitle className="text-xl">Demande de réservation</CardTitle>
                 <CardDescription>
                   Étape {step + 1} sur {steps.length} · {steps[step]}
                 </CardDescription>
@@ -189,6 +224,17 @@ export function PublicReservationRequestPage() {
               <Badge variant="muted">Réponse après validation</Badge>
             </div>
             <Progress value={progress} />
+            <div className="grid grid-cols-2 gap-2 pt-1 sm:grid-cols-4">
+              {steps.map((label, index) => (
+                <StepPill
+                  key={label}
+                  label={label}
+                  active={index === step}
+                  done={index < step}
+                  index={index + 1}
+                />
+              ))}
+            </div>
           </CardHeader>
           <CardContent>
             <div className="min-h-[360px]">
@@ -407,6 +453,16 @@ export function PublicReservationRequestPage() {
             </p>
           </div>
           <div className="rounded-md border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Clock3 className="h-4 w-4 text-primary" />
+              Après l’envoi
+            </div>
+            <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+              <TimelineItem title="Disponibilité" text="Le stock est contrôlé pour vos dates." />
+              <TimelineItem title="Confirmation" text="Vous recevez un retour avant validation." />
+            </div>
+          </div>
+          <div className="rounded-md border bg-card p-5 shadow-sm">
             <div className="text-sm font-semibold">Stock indicatif</div>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-sm">
               <StockPill label="Tables" value={STOCK.tables} />
@@ -422,22 +478,66 @@ export function PublicReservationRequestPage() {
 
 function PublicShell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-background/95">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
+    <div className="min-h-screen bg-background [background-image:linear-gradient(rgba(58,91,160,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(58,91,160,0.08)_1px,transparent_1px)] [background-size:28px_28px]">
+      <header className="border-b bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center px-4 md:px-6">
           <div className="flex items-center gap-3">
-            <img src="/favicon.svg" alt="" className="h-9 w-9" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
+              <Tent className="h-5 w-5" />
+            </div>
             <div className="leading-tight">
               <div className="font-semibold">Comité des Fêtes</div>
               <div className="text-xs text-muted-foreground">Tannerre-en-Puisaye</div>
             </div>
           </div>
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/login">Espace gestion</Link>
-          </Button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:px-6">{children}</main>
+    </div>
+  )
+}
+
+function HeroFact({ icon, label }: { icon: ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-primary-foreground/15 px-3 py-2">
+      {icon}
+      <span>{label}</span>
+    </div>
+  )
+}
+
+function StepPill({
+  label,
+  active,
+  done,
+  index,
+}: {
+  label: string
+  active: boolean
+  done: boolean
+  index: number
+}) {
+  return (
+    <div
+      className={
+        active
+          ? 'rounded-md border border-primary bg-primary/10 px-3 py-2 text-xs font-semibold text-primary'
+          : done
+            ? 'rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700'
+            : 'rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground'
+      }
+    >
+      <span className="mr-1.5 font-mono">{index}</span>
+      {label}
+    </div>
+  )
+}
+
+function TimelineItem({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="border-l-2 border-primary/30 pl-3">
+      <div className="font-medium text-foreground">{title}</div>
+      <div className="text-xs leading-5">{text}</div>
     </div>
   )
 }
