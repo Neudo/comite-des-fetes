@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
   CalendarCheck2,
   CalendarDays,
+  Check,
+  Inbox,
   Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -63,6 +66,11 @@ import {
   useReservations,
   useUpdateReservation,
 } from '@/hooks/useReservations'
+import {
+  useAcceptReservationRequest,
+  useRejectReservationRequest,
+  useReservationRequests,
+} from '@/hooks/useReservationRequests'
 import { calculerPrix, STOCK } from '@/lib/pricing'
 import { disponibilitePeriode } from '@/lib/stock'
 import { addJours, fmtDate, today } from '@/lib/dates'
@@ -71,6 +79,7 @@ import type {
   Adherent,
   Location,
   Reservation,
+  ReservationRequest,
   TypeEmprunteur,
 } from '@/types/database'
 
@@ -121,18 +130,38 @@ function fromReservation(r: Reservation): FormState {
   }
 }
 
+function requestStatusLabel(status: ReservationRequest['status']) {
+  if (status === 'accepted') return 'Acceptée'
+  if (status === 'rejected') return 'Refusée'
+  return 'En attente'
+}
+
+function requestStatusVariant(status: ReservationRequest['status']) {
+  if (status === 'accepted') return 'bon' as const
+  if (status === 'rejected') return 'end' as const
+  return 'enc' as const
+}
+
 export function ReservationsPage() {
   const { data: reservations = [], isLoading } = useReservations()
+  const { data: requests = [], isLoading: requestsLoading } = useReservationRequests()
   const { data: locations = [] } = useLocations()
   const createMut = useCreateReservation()
   const updateMut = useUpdateReservation()
   const deleteMut = useDeleteReservation()
   const confirmMut = useConfirmReservation()
+  const acceptRequestMut = useAcceptReservationRequest()
+  const rejectRequestMut = useRejectReservationRequest()
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<Reservation | null>(null)
   const [confirmTarget, setConfirmTarget] = useState<Reservation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Reservation | null>(null)
+
+  const pendingRequests = useMemo(
+    () => requests.filter((request) => request.status === 'pending'),
+    [requests],
+  )
 
   const conflitsIds = useMemo(() => {
     const ids = new Set<string>()
@@ -187,13 +216,31 @@ export function ReservationsPage() {
     }
   }
 
+  async function handleAcceptRequest(request: ReservationRequest) {
+    try {
+      const id = await acceptRequestMut.mutateAsync(request)
+      toast.success(`Demande acceptée en réservation ${id}.`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Impossible d’accepter la demande.')
+    }
+  }
+
+  async function handleRejectRequest(request: ReservationRequest) {
+    try {
+      await rejectRequestMut.mutateAsync(request.id)
+      toast.success('Demande refusée.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Impossible de refuser la demande.')
+    }
+  }
+
   return (
     <>
       <PageHeader
         title="Réservations"
         description={`${reservations.length} prévisionnelle${reservations.length > 1 ? 's' : ''}${
           conflitsIds.size > 0 ? ` · ${conflitsIds.size} conflit${conflitsIds.size > 1 ? 's' : ''}` : ''
-        }`}
+        }${pendingRequests.length > 0 ? ` · ${pendingRequests.length} demande${pendingRequests.length > 1 ? 's' : ''} en attente` : ''}`}
         icon={<CalendarDays className="h-5 w-5" />}
         actions={
           <Button onClick={openCreate}>
@@ -202,6 +249,108 @@ export function ReservationsPage() {
           </Button>
         }
       />
+
+      <Card className="mb-4">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Inbox className="h-4 w-4 text-primary" />
+                Demandes de réservation
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {pendingRequests.length} en attente · {requests.length} au total
+              </div>
+            </div>
+          </div>
+          {requestsLoading ? (
+            <div className="space-y-2 p-4 pt-0">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : requests.length === 0 ? (
+            <EmptyState
+              className="m-4 mt-0"
+              icon={<Inbox className="h-5 w-5" />}
+              title="Aucune demande reçue"
+              description="Les demandes envoyées depuis la page publique s’afficheront ici."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Demandeur</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Évènement</TableHead>
+                  <TableHead>Période</TableHead>
+                  <TableHead className="text-right">Matériel</TableHead>
+                  <TableHead className="text-right">Prix</TableHead>
+                  <TableHead>Statut</TableHead>
+                  <TableHead className="w-[150px]" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {requests.map((request) => (
+                  <TableRow key={request.id}>
+                    <TableCell className="font-medium">{request.nom}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <div>{request.email}</div>
+                      <div>{request.telephone}</div>
+                    </TableCell>
+                    <TableCell className="max-w-[180px] truncate text-muted-foreground">
+                      {request.evenement || '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {fmtDate(request.date_debut)}{' '}
+                      <span className="text-muted-foreground">→</span>{' '}
+                      {fmtDate(request.date_fin)}
+                    </TableCell>
+                    <TableCell className="text-right text-xs tabular-nums">
+                      {request.tables}T · {request.tente_marron}M · {request.tente_blanche}B
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {request.prix} €
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={requestStatusVariant(request.status)}>
+                        {requestStatusLabel(request.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {request.status === 'pending' ? (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            title="Accepter"
+                            disabled={acceptRequestMut.isPending || rejectRequestMut.isPending}
+                            onClick={() => handleAcceptRequest(request)}
+                          >
+                            <Check className="h-4 w-4" />
+                            <span className="sr-only">Accepter</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon-sm"
+                            variant="outline"
+                            title="Refuser"
+                            disabled={acceptRequestMut.isPending || rejectRequestMut.isPending}
+                            onClick={() => handleRejectRequest(request)}
+                          >
+                            <X className="h-4 w-4" />
+                            <span className="sr-only">Refuser</span>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-0">
@@ -318,6 +467,7 @@ export function ReservationsPage() {
       </Card>
 
       <ReservationSheet
+        key={editing?.id ?? (sheetOpen ? 'create-open' : 'closed')}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         editing={editing}
@@ -418,11 +568,7 @@ function ReservationSheet({
   pending,
   onSubmit,
 }: ReservationSheetProps) {
-  const [form, setForm] = useState<FormState>(emptyForm)
-
-  useEffect(() => {
-    if (open) setForm(editing ? fromReservation(editing) : emptyForm())
-  }, [open, editing])
+  const [form, setForm] = useState<FormState>(() => (editing ? fromReservation(editing) : emptyForm()))
 
   const adh: Adherent = form.type === 'Association' ? 'N/A' : form.adherent
   const prix = calculerPrix(form.type, adh, form.tables, form.tente_marron, form.tente_blanche)

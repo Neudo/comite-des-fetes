@@ -7,19 +7,19 @@ insert into public.locations (
   id, nom, evenement, type, adherent,
   date_retrait, date_prev_retour, date_retour,
   tables, bancs, tente_marron, tente_blanche,
-  prix, etat_retour, notes
+  prix, is_payed, etat_retour, notes
 ) values
   (
     'L011', 'Bruno Le coup de Frein', null, 'Association', 'N/A',
     '2026-04-11', '2026-04-13', '2026-04-13',
     5, 10, 0, 0,
-    0, 'Bon', null
+    0, true, 'Bon', null
   ),
   (
     'L012', 'Tetrel', null, 'Particulier', 'Oui',
     '2026-04-28', '2026-05-01', null,
     4, 8, 0, 0,
-    8, null, null
+    8, false, null, null
   )
 on conflict (id) do update set
   nom              = excluded.nom,
@@ -34,6 +34,7 @@ on conflict (id) do update set
   tente_marron     = excluded.tente_marron,
   tente_blanche    = excluded.tente_blanche,
   prix             = excluded.prix,
+  is_payed         = excluded.is_payed,
   etat_retour      = excluded.etat_retour,
   notes            = excluded.notes;
 

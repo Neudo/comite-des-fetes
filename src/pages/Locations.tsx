@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   ClipboardList,
@@ -239,6 +239,7 @@ export function LocationsPage() {
       </Card>
 
       <CreateLocationSheet
+        key={createOpen ? 'create-open' : 'create-closed'}
         open={createOpen}
         onOpenChange={setCreateOpen}
         dispo={dispoActuel}
@@ -251,6 +252,7 @@ export function LocationsPage() {
       />
 
       <ReturnDialog
+        key={returnTarget?.id ?? 'return-closed'}
         location={returnTarget}
         onClose={() => setReturnTarget(null)}
         onSubmit={async (input) => {
@@ -311,10 +313,6 @@ interface CreateSheetProps {
 
 function CreateLocationSheet({ open, onOpenChange, dispo, onSubmit, pending }: CreateSheetProps) {
   const [form, setForm] = useState<FormState>(emptyForm)
-
-  useEffect(() => {
-    if (open) setForm(emptyForm())
-  }, [open])
 
   const adh: Adherent = form.type === 'Association' ? 'N/A' : form.adherent
   const prix = calculerPrix(form.type, adh, form.tables, form.tente_marron, form.tente_blanche)
@@ -555,6 +553,7 @@ interface ReturnDialogProps {
     id: string
     date_retour: string
     etat_retour: EtatRetour
+    is_payed: boolean
     notes: string | null
   }) => void
 }
@@ -562,15 +561,8 @@ interface ReturnDialogProps {
 function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProps) {
   const [date, setDate] = useState(today())
   const [etat, setEtat] = useState<EtatRetour>('Bon')
+  const [isPayed, setIsPayed] = useState(false)
   const [notes, setNotes] = useState('')
-
-  useEffect(() => {
-    if (location) {
-      setDate(today())
-      setEtat('Bon')
-      setNotes('')
-    }
-  }, [location])
 
   if (!location) return null
 
@@ -606,6 +598,29 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
               <option value="Manquant">Manquant</option>
             </Select>
           </div>
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium">Payé ?</legend>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="ret-is-payed"
+                  checked={isPayed}
+                  onChange={() => setIsPayed(true)}
+                />
+                Oui
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="ret-is-payed"
+                  checked={!isPayed}
+                  onChange={() => setIsPayed(false)}
+                />
+                Non
+              </label>
+            </div>
+          </fieldset>
           <div className="grid gap-2">
             <Label htmlFor="ret-notes">Notes</Label>
             <Textarea
@@ -628,6 +643,7 @@ function ReturnDialog({ location, pending, onClose, onSubmit }: ReturnDialogProp
                 id: location.id,
                 date_retour: date,
                 etat_retour: etat,
+                is_payed: isPayed,
                 notes: notes.trim() || null,
               })
             }

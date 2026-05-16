@@ -16,7 +16,7 @@ export function LoginPage() {
 
   if (loading) return null
   if (session) {
-    const from = (location.state as { from?: string } | null)?.from ?? '/'
+    const from = (location.state as { from?: string } | null)?.from ?? '/admin'
     return <Navigate to={from} replace />
   }
 

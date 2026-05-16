@@ -94,6 +94,7 @@ export function useConfirmReservation() {
         date_retrait: r.date_debut,
         date_prev_retour: r.date_fin,
         date_retour: null,
+        is_payed: false,
         tables: r.tables,
         bancs: r.bancs,
         tente_marron: r.tente_marron,

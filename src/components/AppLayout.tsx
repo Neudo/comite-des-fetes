@@ -23,13 +23,13 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: '/', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
-  { to: '/reservations', label: 'Réservations', icon: CalendarDays },
-  { to: '/locations', label: 'Locations', icon: ClipboardList },
-  { to: '/calendrier', label: 'Calendrier', icon: CalendarDays },
-  { to: '/inventaire', label: 'Inventaire', icon: Package },
-  { to: '/tarification', label: 'Tarification', icon: Receipt },
-  { to: '/historique', label: 'Historique', icon: History },
+  { to: '/admin', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
+  { to: '/admin/reservations', label: 'Réservations', icon: CalendarDays },
+  { to: '/admin/locations', label: 'Locations', icon: ClipboardList },
+  { to: '/admin/calendrier', label: 'Calendrier', icon: CalendarDays },
+  { to: '/admin/inventaire', label: 'Inventaire', icon: Package },
+  { to: '/admin/tarification', label: 'Tarification', icon: Receipt },
+  { to: '/admin/historique', label: 'Historique', icon: History },
 ]
 
 export function AppLayout() {

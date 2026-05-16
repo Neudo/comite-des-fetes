@@ -53,6 +53,7 @@ export function useCreateLocation() {
         id,
         ...input,
         date_retour: null,
+        is_payed: false,
         etat_retour: null,
         notes: null,
       })
@@ -67,16 +68,39 @@ export interface RegisterReturnInput {
   id: string
   date_retour: string
   etat_retour: EtatRetour
+  is_payed: boolean
   notes: string | null
 }
 
 export function useRegisterReturn() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, date_retour, etat_retour, notes }: RegisterReturnInput) => {
+    mutationFn: async ({ id, date_retour, etat_retour, is_payed, notes }: RegisterReturnInput) => {
       const { error } = await supabase
         .from('locations')
-        .update({ date_retour, etat_retour: etat_retour || null, notes })
+        .update({ date_retour, etat_retour: etat_retour || null, is_payed, notes })
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
+export function useUpdateLocationReturnPayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      date_retour,
+      is_payed,
+    }: {
+      id: string
+      date_retour: string
+      is_payed: boolean
+    }) => {
+      const { error } = await supabase
+        .from('locations')
+        .update({ date_retour, is_payed })
         .eq('id', id)
       if (error) throw error
     },

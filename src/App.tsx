@@ -1,10 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from '@/components/ui/sonner'
-import { AuthProvider } from '@/hooks/useAuth'
+import { AuthProvider } from '@/hooks/AuthProvider'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/Login'
+import { PublicReservationRequestPage } from '@/pages/PublicReservationRequest'
 import { DashboardPage } from '@/pages/Dashboard'
 import { LocationsPage } from '@/pages/Locations'
 import { ReservationsPage } from '@/pages/Reservations'
@@ -25,9 +26,10 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
+            <Route index element={<PublicReservationRequestPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route element={<ProtectedRoute />}>
-              <Route element={<AppLayout />}>
+              <Route path="/admin" element={<AppLayout />}>
                 <Route index element={<DashboardPage />} />
                 <Route path="reservations" element={<ReservationsPage />} />
                 <Route path="locations" element={<LocationsPage />} />

@@ -1,18 +1,24 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  AlertTriangle,
   ArmchairIcon,
   CalendarDays,
   CheckCircle2,
   ClipboardList,
+  Euro,
   LayoutDashboard,
   Tent,
   TentTree,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -26,86 +32,33 @@ import { EmptyState } from '@/components/EmptyState'
 import { useLocations } from '@/hooks/useLocations'
 import { useReservations } from '@/hooks/useReservations'
 import { STOCK } from '@/lib/pricing'
-import { disponibilitePeriode } from '@/lib/stock'
 import { fmtDate } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import type { ComponentType } from 'react'
 
-interface ConflitRow {
-  id: string
-  nom: string
-  debut: string
-  fin: string
-  tables: number
-  tente_marron: number
-  tente_blanche: number
-  src: 'reservation' | 'location'
-}
-
 export function DashboardPage() {
   const { data: locations = [] } = useLocations()
   const { data: reservations = [] } = useReservations()
+  const [unpaidOpen, setUnpaidOpen] = useState(false)
 
   const actives = useMemo(() => locations.filter((l) => !l.date_retour), [locations])
+  const impayees = useMemo(
+    () =>
+      locations
+        .filter((l) => l.date_retour && !l.is_payed)
+        .sort((a, b) => (a.date_retour! < b.date_retour! ? 1 : -1)),
+    [locations],
+  )
+  const totalImpayes = impayees.reduce((s, l) => s + (l.prix || 0), 0)
   const tablesEnc = actives.reduce((s, l) => s + l.tables, 0)
   const marronEnc = actives.reduce((s, l) => s + l.tente_marron, 0)
   const blancheEnc = actives.reduce((s, l) => s + l.tente_blanche, 0)
-
-  const conflits = useMemo<ConflitRow[]>(() => {
-    const items: ConflitRow[] = []
-    for (const r of reservations) {
-      const dispo = disponibilitePeriode(r.date_debut, r.date_fin, locations, reservations, {
-        kind: 'reservation',
-        id: r.id,
-      })
-      if (
-        r.tables > dispo.tables ||
-        r.tente_marron > dispo.tente_marron ||
-        r.tente_blanche > dispo.tente_blanche
-      ) {
-        items.push({
-          id: r.id,
-          nom: r.nom,
-          debut: r.date_debut,
-          fin: r.date_fin,
-          tables: r.tables,
-          tente_marron: r.tente_marron,
-          tente_blanche: r.tente_blanche,
-          src: 'reservation',
-        })
-      }
-    }
-    for (const l of actives) {
-      const fin = l.date_prev_retour ?? l.date_retrait
-      const dispo = disponibilitePeriode(l.date_retrait, fin, locations, reservations, {
-        kind: 'location',
-        id: l.id,
-      })
-      if (
-        l.tables > dispo.tables ||
-        l.tente_marron > dispo.tente_marron ||
-        l.tente_blanche > dispo.tente_blanche
-      ) {
-        items.push({
-          id: l.id,
-          nom: l.nom,
-          debut: l.date_retrait,
-          fin,
-          tables: l.tables,
-          tente_marron: l.tente_marron,
-          tente_blanche: l.tente_blanche,
-          src: 'location',
-        })
-      }
-    }
-    return items
-  }, [actives, locations, reservations])
 
   return (
     <>
       <PageHeader
         title="Tableau de bord"
-        description="Aperçu des locations en cours, réservations et conflits"
+        description="Aperçu des locations en cours, réservations et paiements"
         icon={<LayoutDashboard className="h-5 w-5" />}
       />
 
@@ -141,10 +94,11 @@ export function DashboardPage() {
           tone={STOCK.tente_blanche - blancheEnc === 0 ? 'danger' : 'default'}
         />
         <Stat
-          label="Conflits stock"
-          value={conflits.length}
-          icon={conflits.length ? AlertTriangle : CheckCircle2}
-          tone={conflits.length ? 'warn' : 'success'}
+          label="Total impayé"
+          value={`${totalImpayes} €`}
+          icon={totalImpayes > 0 ? Euro : CheckCircle2}
+          tone={totalImpayes > 0 ? 'warn' : 'success'}
+          onClick={() => setUnpaidOpen(true)}
         />
       </div>
 
@@ -153,7 +107,7 @@ export function DashboardPage() {
           <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 py-4">
             <CardTitle className="text-base">Locations en cours</CardTitle>
             <Button asChild variant="ghost" size="sm">
-              <Link to="/locations">Voir tout</Link>
+              <Link to="/admin/locations">Voir tout</Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -182,7 +136,7 @@ export function DashboardPage() {
           <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 py-4">
             <CardTitle className="text-base">Réservations à venir</CardTitle>
             <Button asChild variant="ghost" size="sm">
-              <Link to="/reservations">Voir tout</Link>
+              <Link to="/admin/reservations">Voir tout</Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -208,62 +162,58 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="mt-4">
-        <CardHeader className="py-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {conflits.length === 0 ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-amber-600" />
-            )}
-            Conflits de stock
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {conflits.length === 0 ? (
+      <Dialog open={unpaidOpen} onOpenChange={setUnpaidOpen}>
+        <DialogContent className="w-[min(820px,96vw)]">
+          <DialogHeader>
+            <DialogTitle>Locations impayées</DialogTitle>
+            <DialogDescription>
+              Locations terminées avec une date de retour renseignée et non marquées comme payées.
+            </DialogDescription>
+          </DialogHeader>
+          {impayees.length === 0 ? (
             <EmptyState
-              className="m-4"
               icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />}
-              title="Aucun conflit détecté"
-              description="Le stock est suffisant pour toutes les locations et réservations en cours."
+              title="Aucun impayé"
+              description="Toutes les locations terminées sont indiquées comme payées."
             />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>N°</TableHead>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Période</TableHead>
-                  <TableHead className="text-right">Tables</TableHead>
-                  <TableHead className="text-right">T.Marron</TableHead>
-                  <TableHead className="text-right">T.Blanche</TableHead>
-                  <TableHead>Source</TableHead>
+                  <TableHead>Emprunteur</TableHead>
+                  <TableHead>Évènement</TableHead>
+                  <TableHead>Retour</TableHead>
+                  <TableHead className="text-right">Prix</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {conflits.map((c) => (
-                  <TableRow key={`${c.src}-${c.id}`} className="bg-amber-50/40">
-                    <TableCell className="font-mono text-xs font-medium">{c.id}</TableCell>
-                    <TableCell className="font-medium">{c.nom}</TableCell>
-                    <TableCell className="text-sm">
-                      {fmtDate(c.debut)} <span className="text-muted-foreground">→</span>{' '}
-                      {fmtDate(c.fin)}
+                {impayees.map((l) => (
+                  <TableRow key={l.id} className="bg-amber-50/40">
+                    <TableCell className="font-mono text-xs font-medium">{l.id}</TableCell>
+                    <TableCell className="font-medium">{l.nom}</TableCell>
+                    <TableCell className="max-w-[220px] truncate text-muted-foreground">
+                      {l.evenement || '—'}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{c.tables}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.tente_marron}</TableCell>
-                    <TableCell className="text-right tabular-nums">{c.tente_blanche}</TableCell>
-                    <TableCell>
-                      <Badge variant={c.src === 'reservation' ? 'default' : 'enc'}>
-                        {c.src === 'reservation' ? 'Réservation' : 'Location'}
-                      </Badge>
+                    <TableCell>{fmtDate(l.date_retour)}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {l.prix} €
                     </TableCell>
                   </TableRow>
                 ))}
+                <TableRow>
+                  <TableCell colSpan={4} className="text-right font-medium">
+                    Total
+                  </TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {totalImpayes} €
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
@@ -273,9 +223,10 @@ interface StatProps {
   value: number | string
   icon: ComponentType<{ className?: string }>
   tone: 'default' | 'success' | 'warn' | 'danger'
+  onClick?: () => void
 }
 
-function Stat({ label, value, icon: Icon, tone }: StatProps) {
+function Stat({ label, value, icon: Icon, tone, onClick }: StatProps) {
   const valueCls = {
     default: 'text-foreground',
     success: 'text-emerald-600',
@@ -283,7 +234,19 @@ function Stat({ label, value, icon: Icon, tone }: StatProps) {
     danger: 'text-rose-600',
   }[tone]
   return (
-    <Card>
+    <Card
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (!onClick) return
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className={cn(onClick && 'cursor-pointer transition-colors hover:bg-accent/20')}
+    >
       <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
           <div className="text-xs text-muted-foreground">{label}</div>

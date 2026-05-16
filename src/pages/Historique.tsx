@@ -1,10 +1,27 @@
 import { useMemo, useState } from 'react'
-import { History, Search } from 'lucide-react'
+import { toast } from 'sonner'
+import { History, Loader2, MoreHorizontal, Pencil, Search } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Table,
   TableBody,
@@ -15,9 +32,9 @@ import {
 } from '@/components/ui/table'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
-import { useLocations } from '@/hooks/useLocations'
+import { useLocations, useUpdateLocationReturnPayment } from '@/hooks/useLocations'
 import { fmtDate } from '@/lib/dates'
-import type { EtatRetour } from '@/types/database'
+import type { EtatRetour, Location } from '@/types/database'
 
 function etatVariant(e: EtatRetour | null) {
   if (!e) return 'muted' as const
@@ -27,10 +44,12 @@ function etatVariant(e: EtatRetour | null) {
 
 export function HistoriquePage() {
   const { data: locations = [], isLoading } = useLocations()
+  const updateMut = useUpdateLocationReturnPayment()
 
   const [q, setQ] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [editing, setEditing] = useState<Location | null>(null)
 
   const terminees = useMemo(
     () =>
@@ -54,12 +73,13 @@ export function HistoriquePage() {
   }, [terminees, q, from, to])
 
   const totalRevenu = filtered.reduce((s, l) => s + (l.prix || 0), 0)
+  const totalEncaisse = filtered.reduce((s, l) => s + (l.is_payed ? l.prix || 0 : 0), 0)
 
   return (
     <>
       <PageHeader
         title="Historique"
-        description={`${filtered.length} location${filtered.length > 1 ? 's' : ''} terminée${filtered.length > 1 ? 's' : ''} · ${totalRevenu} € encaissés`}
+        description={`${filtered.length} location${filtered.length > 1 ? 's' : ''} terminée${filtered.length > 1 ? 's' : ''} · ${totalEncaisse} € encaissés / ${totalRevenu} € total`}
         icon={<History className="h-5 w-5" />}
       />
 
@@ -144,8 +164,10 @@ export function HistoriquePage() {
                   <TableHead className="text-right">T.Marron</TableHead>
                   <TableHead className="text-right">T.Blanche</TableHead>
                   <TableHead className="text-right">Prix</TableHead>
+                  <TableHead>Payé</TableHead>
                   <TableHead>État</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead className="w-[50px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -170,12 +192,31 @@ export function HistoriquePage() {
                       {l.prix} €
                     </TableCell>
                     <TableCell>
+                      <PaymentBadge isPayed={l.is_payed} />
+                    </TableCell>
+                    <TableCell>
                       <Badge variant={etatVariant(l.etat_retour)}>
                         {l.etat_retour || '—'}
                       </Badge>
                     </TableCell>
                     <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground">
                       {l.notes || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon-sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditing(l)}>
+                            <Pencil className="h-4 w-4" />
+                            Modifier
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -184,6 +225,121 @@ export function HistoriquePage() {
           )}
         </CardContent>
       </Card>
+
+      <ReturnPaymentSheet
+        key={editing?.id ?? 'closed'}
+        location={editing}
+        pending={updateMut.isPending}
+        onClose={() => setEditing(null)}
+        onSubmit={async (payload) => {
+          try {
+            await updateMut.mutateAsync(payload)
+            toast.success(`Location ${payload.id} modifiée.`)
+            setEditing(null)
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Erreur lors de la modification.')
+          }
+        }}
+      />
     </>
+  )
+}
+
+function PaymentBadge({ isPayed }: { isPayed: boolean }) {
+  return (
+    <Badge variant={isPayed ? 'bon' : 'non'}>
+      {isPayed ? 'Oui' : 'Non'}
+    </Badge>
+  )
+}
+
+interface ReturnPaymentSheetProps {
+  location: Location | null
+  pending: boolean
+  onClose: () => void
+  onSubmit: (payload: { id: string; date_retour: string; is_payed: boolean }) => Promise<void>
+}
+
+function ReturnPaymentSheet({
+  location,
+  pending,
+  onClose,
+  onSubmit,
+}: ReturnPaymentSheetProps) {
+  const [dateRetour, setDateRetour] = useState(location?.date_retour ?? '')
+  const [isPayed, setIsPayed] = useState(location?.is_payed ?? false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!location) return
+    if (!dateRetour) {
+      toast.error('Date de retour obligatoire.')
+      return
+    }
+    await onSubmit({
+      id: location.id,
+      date_retour: dateRetour,
+      is_payed: isPayed,
+    })
+  }
+
+  return (
+    <Sheet open={!!location} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>{location ? `Modifier ${location.id}` : 'Modifier'}</SheetTitle>
+          <SheetDescription>
+            Mettre à jour uniquement le paiement et la date de retour.
+          </SheetDescription>
+        </SheetHeader>
+
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
+          <SheetBody className="space-y-5">
+            <div className="grid gap-2">
+              <Label htmlFor="hist-ret-date">Date de retour</Label>
+              <Input
+                id="hist-ret-date"
+                type="date"
+                value={dateRetour}
+                onChange={(e) => setDateRetour(e.target.value)}
+              />
+            </div>
+            <fieldset className="grid gap-2">
+              <legend className="text-sm font-medium">Payé ?</legend>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="hist-is-payed"
+                    checked={isPayed}
+                    onChange={() => setIsPayed(true)}
+                  />
+                  Oui
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="hist-is-payed"
+                    checked={!isPayed}
+                    onChange={() => setIsPayed(false)}
+                  />
+                  Non
+                </label>
+              </div>
+            </fieldset>
+          </SheetBody>
+
+          <SheetFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Annuler
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Enregistrer
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   )
 }
