@@ -6,6 +6,7 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { AppLayout } from '@/components/AppLayout'
 import { LoginPage } from '@/pages/Login'
 import { PublicReservationRequestPage } from '@/pages/PublicReservationRequest'
+import { PublicInfoPage } from '@/pages/PublicInfoPage'
 import { DashboardPage } from '@/pages/Dashboard'
 import { LocationsPage } from '@/pages/Locations'
 import { ReservationsPage } from '@/pages/Reservations'
@@ -27,6 +28,15 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route index element={<PublicReservationRequestPage />} />
+            <Route path="/contact" element={<PublicInfoPage kind="contact" />} />
+            <Route
+              path="/mentions-legales"
+              element={<PublicInfoPage kind="mentions-legales" />}
+            />
+            <Route
+              path="/confidentialite"
+              element={<PublicInfoPage kind="confidentialite" />}
+            />
             <Route path="/login" element={<LoginPage />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/admin" element={<AppLayout />}>

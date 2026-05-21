@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Seo } from '@/components/Seo'
 import { useAuth } from '@/hooks/useAuth'
 
 export function LoginPage() {
@@ -31,6 +32,12 @@ export function LoginPage() {
 
   return (
     <div className="min-h-screen grid place-items-center bg-muted p-4">
+      <Seo
+        title="Connexion administration"
+        description="Accès à l’espace de gestion interne du Comité des Fêtes."
+        path="/login"
+        noindex
+      />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
@@ -22,9 +23,11 @@ import { Progress } from '@/components/ui/progress'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Seo } from '@/components/Seo'
 import { useCreateReservationRequest } from '@/hooks/useReservationRequests'
 import { calculerPrix, STOCK } from '@/lib/pricing'
 import { addJours, fmtDate, today } from '@/lib/dates'
+import { site } from '@/lib/site'
 import type { Adherent, TypeEmprunteur } from '@/types/database'
 
 interface RequestForm {
@@ -150,6 +153,12 @@ export function PublicReservationRequestPage() {
   if (submitted) {
     return (
       <PublicShell>
+        <Seo
+          title="Demande de réservation envoyée"
+          description="Confirmation d’envoi du formulaire public de demande de réservation."
+          path="/"
+          jsonLd={organizationJsonLd()}
+        />
         <Card className="mx-auto w-full max-w-2xl">
           <CardHeader className="text-center">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-emerald-100 text-emerald-700">
@@ -180,6 +189,12 @@ export function PublicReservationRequestPage() {
 
   return (
     <PublicShell>
+      <Seo
+        title="Demande de réservation"
+        description={site.description}
+        path="/"
+        jsonLd={organizationJsonLd()}
+      />
       <section className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="rounded-md border bg-card p-5 shadow-sm md:p-6">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-secondary/70 px-3 py-1 text-xs font-semibold text-secondary-foreground">
@@ -192,6 +207,11 @@ export function PublicReservationRequestPage() {
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
             Envoyez votre demande au Comité des Fêtes de Tannerre-en-Puisaye. Le tarif est estimé automatiquement avant validation.
           </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-xs">
+            <TrustLink to="/mentions-legales" label="Mentions légales" />
+            <TrustLink to="/confidentialite" label="Confidentialité" />
+            <TrustLink to="/contact" label="Contact" />
+          </div>
         </div>
         <div className="grid gap-3 rounded-md border bg-primary p-5 text-primary-foreground shadow-sm">
           <div className="flex items-center gap-3">
@@ -451,6 +471,9 @@ export function PublicReservationRequestPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               L’envoi crée une demande en attente. La réservation devient effective après validation.
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Le site collecte uniquement les informations nécessaires au traitement manuel de la demande.
+            </p>
           </div>
           <div className="rounded-md border bg-card p-5 shadow-sm">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -494,6 +517,41 @@ function PublicShell({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:px-6">{children}</main>
     </div>
+  )
+}
+
+function organizationJsonLd() {
+  const payload: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: site.name,
+    url: site.url,
+    description: site.description,
+    areaServed: site.locality,
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: site.locality,
+      addressCountry: site.countryCode,
+    },
+  }
+
+  if (site.contactEmail) payload.email = site.contactEmail
+  if (site.contactPhone) payload.telephone = site.contactPhone
+  if (site.streetAddress) {
+    ;(payload.address as Record<string, unknown>).streetAddress = site.streetAddress
+  }
+
+  return payload
+}
+
+function TrustLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center rounded-md border bg-background px-2.5 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
+    >
+      {label}
+    </Link>
   )
 }
 

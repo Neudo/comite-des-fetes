@@ -10,6 +10,7 @@ import {
   Tent,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Seo } from '@/components/Seo'
 import { Separator } from '@/components/ui/separator'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAuth } from '@/hooks/useAuth'
@@ -38,6 +39,12 @@ export function AppLayout() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-muted/30">
+        <Seo
+          title="Administration"
+          description="Espace de gestion interne du Comité des Fêtes."
+          path="/admin"
+          noindex
+        />
         <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
           <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 md:px-6">
             <div className="flex items-center gap-2.5">
